@@ -1,11 +1,17 @@
 id: io.github.touchhle.touchHLE
 runtime: org.freedesktop.Platform
-runtime-version: "24.08"
+runtime-version: "25.08"
 sdk: org.freedesktop.Sdk
+
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.rust-stable
+
 command: touchHLE
 finish-args:
   - --share=network
   - --share=ipc
+  - --socket=fallback-x11
+  - --socket=wayland
   - --device=all
   - --filesystem=home
 
@@ -13,70 +19,73 @@ modules:
   - name: touchHLE
     buildsystem: simple
     build-options:
+      append-path: /usr/lib/sdk/rust-stable/bin
+      build-args:
+        - --share=network
       env:
         RUSTUP_TOOLCHAIN: stable
         CARGO_HOME: /run/build/touchHLE/cargo
         CFLAGS: "-Wno-error=incompatible-pointer-types"
         CMAKE_POLICY_VERSION_MINIMUM: "3.5"
 
+        # Boost
+        CMAKE_ARGS: >-
+          -DDYNARMIC_USE_BUNDLED_EXTERNALS=ON
+          -DDYNARMIC_BOOST=OFF
+          -DBoost_NO_SYSTEM_PATHS=ON
+          -DBoost_INCLUDE_DIR=/run/build/touchHLE/src/vendor/dynarmic/externals/boost/include
+          -DBoost_LIBRARY_DIR=/run/build/touchHLE/src/vendor/dynarmic/externals/boost/lib
+          -DBoost_INCLUDE_DIR_2=/run/build/touchHLE/src/vendor/dynarmic/external/boost/include
+          -DBoost_LIBRARY_DIR_2=/run/build/touchHLE/src/vendor/dynarmic/external/boost/lib
+          -DCMAKE_PREFIX_PATH=/run/build/touchHLE/src/vendor/dynarmic/externals/boost;/run/build/touchHLE/src/vendor/dynarmic/external/boost
+
     sources:
-      # Main source
       - type: archive
         url: https://github.com/touchHLE/touchHLE/archive/refs/tags/v0.2.2.tar.gz
-        sha256: AUTO_ADD
+        sha256: 5eb2d39780848966c4ff2adacdfc0613d3d4e61e1c2c68ccbfa18b5214bd0fbe
 
-      # Patches
-      - type: patch
-        path: touchhle_cargo_system_sdl2.patch
-      - type: patch
-        path: touchhle_fhs_paths.patch
+      - type: file
+        url: https://raw.githubusercontent.com/Twig6943/touchhle-packaging/refs/heads/main/patches/touchhle_cargo_system_sdl2.patch
+        sha256: ffe20d471fbe3eb6127d33e0886b0d2bf261cebbe2b0d4b01996d6c2bc99bed7
 
-      # Git submodules
+      - type: file
+        url: https://raw.githubusercontent.com/Twig6943/touchhle-packaging/refs/heads/main/patches/touchhle_fhs_paths.patch
+        sha256: d475972b733ccf608db67045acaaaee9f36f9332ee831bdb82ec96bb604b6f42
+
       - type: archive
         dest: vendor/stb
         url: https://github.com/nothings/stb/archive/9f1776a36d2a3d63c52f705c3a84b372cfed4340.tar.gz
-        sha256: AUTO_ADD
+        sha256: 475079ffbb9431f4d9ea6e3518e553b6810a75f0a4354262e83d2fbbfa8c3e31
 
       - type: archive
         dest: vendor/dynarmic
         url: https://github.com/touchHLE/dynarmic/archive/76aa4dd665085fb6ac10d4cd58e25466366d0799.tar.gz
-        sha256: AUTO_ADD
+        sha256: 0c9e508c525ae1e8e7211a341e7d315850c78a836a98e5db5adafbadbf069bce
 
       - type: archive
         dest: vendor/dr_libs
         url: https://github.com/mackron/dr_libs/archive/dd762b861ecadf5ddd5fb03e9ca1db6707b54fbb.tar.gz
-        sha256: AUTO_ADD
+        sha256: 8f0be8a4aa27cd4ddaba41acbb845b1641964f2cc2f5a5f7b4b72f73368c1c12
 
     build-commands:
-      # --- Apply submodules and patches ---
       - patch -p1 < touchhle_cargo_system_sdl2.patch
       - patch -p1 < touchhle_fhs_paths.patch
-      
-      # Fetch dependencies
-      - cargo fetch --locked
 
-      # Build
+      - cargo fetch --locked
       - cargo build --frozen --release --no-default-features
 
-      # Install
       - install -Dm755 target/release/touchHLE /app/bin/touchHLE
       - install -Dm644 CHANGELOG.md /app/share/doc/touchhle/CHANGELOG.md
       - install -Dm644 OPTIONS_HELP.txt /app/share/doc/touchhle/OPTIONS_HELP.txt
       - install -Dm644 README.md /app/share/doc/touchhle/README.md
       - install -Dm644 LICENSE /app/share/licenses/touchhle/LICENSE
 
-      # Install fonts directory
       - install -d /app/share/touchhle/fonts
-
-      # Liberation fonts (symlink system version)
       - ln -s /usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf /app/share/touchhle/fonts/LiberationSans-Bold.ttf
       - ln -s /usr/share/fonts/truetype/liberation/LiberationSans-Italic.ttf /app/share/touchhle/fonts/LiberationSans-Italic.ttf
       - ln -s /usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf /app/share/touchhle/fonts/LiberationSans-Regular.ttf
-
-      # Copy bundled Noto fonts
       - cp -ar touchHLE_fonts/* /app/share/touchhle/fonts/
 
-      # Install dylibs directory
       - cp -ar touchHLE_dylibs /app/share/touchhle/dylibs
 
     cleanup:
